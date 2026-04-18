@@ -16,7 +16,10 @@ async function startServer() {
   /* ── security middleware ── */
   app.use(helmet())
   app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: [
+      'http://localhost:5173',
+      'https://swipebridge.onrender.com'
+    ],
     credentials: true,
   }))
 
