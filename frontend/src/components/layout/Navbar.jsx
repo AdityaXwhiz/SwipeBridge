@@ -44,6 +44,16 @@ export default function Navbar() {
             {label}
           </NavLink>
         ))}
+        {/* ── Assistant with glow effect ── */}
+        <NavLink to="/assistant" className="nav-assistant-link" style={({ isActive }) => ({
+          padding:'7px 16px', borderRadius:9999,
+          fontSize:13, fontWeight:600,
+          color: isActive ? '#fff' : '#d4d4d8',
+          textDecoration:'none',
+          fontFamily:'Outfit, sans-serif',
+        })}>
+          Assistant ✨
+        </NavLink>
       </div>
 
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>

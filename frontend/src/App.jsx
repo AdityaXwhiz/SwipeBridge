@@ -9,6 +9,7 @@ import PaymentFlow  from './pages/PaymentFlow'
 import AddCard      from './pages/AddCard'
 import BestDeal     from './pages/BestDeal'
 import CardsDeck    from './pages/CardsDeck'
+import Assistant    from './pages/Assistant'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="/pay"       element={<ProtectedRoute><PaymentFlow /></ProtectedRoute>} />
         <Route path="/add-card"  element={<ProtectedRoute><AddCard /></ProtectedRoute>} />
         <Route path="/cards-deck" element={<ProtectedRoute><CardsDeck /></ProtectedRoute>} />
+        <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Routes>
     </>
