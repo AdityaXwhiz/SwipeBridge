@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ArrowIcon } from '../components/ui/Icons'
 import SkeuomorphicCard from '../components/ui/SkeuomorphicCard'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
 import api from '../utils/api'
 
 /* ── Reveal animation wrapper ── */
@@ -26,6 +26,56 @@ function SidebarIcon({ path }) {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={path} /></svg>
 }
 
+/* ── Score gauge arc helper ── */
+function ScoreGauge({ score, size = 120 }) {
+  const status = score >= 750 ? 'excellent' : score >= 700 ? 'good' : score >= 600 ? 'fair' : 'poor'
+  const colors = { poor: '#ef4444', fair: '#f97316', good: '#22c55e', excellent: '#10b981' }
+  const color = colors[status]
+  const pct = Math.max(0, Math.min(1, (score - 300) / 600))
+  const r = (size - 12) / 2
+  const circumference = Math.PI * r // half circle
+  const offset = circumference - pct * circumference
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size / 2 + 20, flexShrink: 0 }}>
+      <svg width={size} height={size / 2 + 10} viewBox={`0 0 ${size} ${size / 2 + 10}`}>
+        <path
+          d={`M 6 ${size / 2} A ${r} ${r} 0 0 1 ${size - 6} ${size / 2}`}
+          fill="none" stroke="#111" strokeWidth="8" strokeLinecap="round"
+        />
+        <path
+          d={`M 6 ${size / 2} A ${r} ${r} 0 0 1 ${size - 6} ${size / 2}`}
+          fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.23,1,0.32,1)' }}
+        />
+      </svg>
+      <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
+        <div style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: 32, fontWeight: 500, color: '#fff', fontStyle: 'italic', lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 2 }}>
+          {status === 'excellent' ? 'Excellent' : status === 'good' ? 'Good' : status === 'fair' ? 'Fair' : 'Needs work'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Tag badge for eligibility ── */
+function EligTag({ tag }) {
+  const styles = {
+    'High approval chance': { bg: 'rgba(34,197,94,0.12)', color: '#22c55e', border: 'rgba(34,197,94,0.2)' },
+    'Good match':           { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: 'rgba(59,130,246,0.2)' },
+    'Eligible':             { bg: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: 'rgba(139,92,246,0.2)' },
+    'Needs improvement':    { bg: 'rgba(249,115,22,0.12)',  color: '#fb923c', border: 'rgba(249,115,22,0.2)' },
+  }
+  const s = styles[tag] || styles['Eligible']
+  return (
+    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: s.bg, color: s.color, border: `1px solid ${s.border}`, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+      {tag}
+    </span>
+  )
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
@@ -37,6 +87,15 @@ export default function Dashboard() {
   const [loadingCards, setLoadingCards] = useState(true)
   const [loadingTxns, setLoadingTxns] = useState(true)
   const [activeSection, setActiveSection] = useState('overview')
+
+  /* ── Credit Score State ── */
+  const [creditData, setCreditData] = useState(null)
+  const [eligibility, setEligibility] = useState(null)
+  const [creditLoading, setCreditLoading] = useState(true)
+  const [showConsentModal, setShowConsentModal] = useState(false)
+  const [fetchingScore, setFetchingScore] = useState(false)
+  const [consentForm, setConsentForm] = useState({ name: '', pan: '', dob: '', phone: '', annualIncome: '', consent: false })
+  const [creditError, setCreditError] = useState('')
 
   /* ── Fetch real data from API ── */
   useEffect(() => {
@@ -72,7 +131,69 @@ export default function Dashboard() {
         })))
       })
       .catch(() => {})
+
+    /* Fetch credit score */
+    fetchCreditData()
   }, [])
+
+  useEffect(() => {
+    if (eligibility) {
+      console.log("ELIGIBILITY DATA:", eligibility)
+    }
+  }, [eligibility])
+
+  async function fetchCreditData() {
+    try {
+      setCreditLoading(true)
+      const [scoreRes] = await Promise.all([
+        api.get('/credit/score'),
+      ])
+
+      if (scoreRes.data.success && scoreRes.data.hasCreditScore) {
+        setCreditData(scoreRes.data)
+        /* Fetch eligibility only if score exists */
+        const eligRes = await api.get('/credit/eligibility')
+        if (eligRes.data.success) setEligibility(eligRes.data)
+      } else {
+        setCreditData({ hasCreditScore: false })
+      }
+    } catch (err) {
+      console.error('Credit data fetch error:', err)
+      setCreditData({ hasCreditScore: false })
+    } finally {
+      setCreditLoading(false)
+    }
+  }
+
+  async function handleFetchScore(e) {
+    e.preventDefault()
+    setCreditError('')
+    if (!consentForm.consent) {
+      setCreditError('Please provide consent to fetch your credit score.')
+      return
+    }
+    if (!consentForm.name || !consentForm.pan || !consentForm.dob || !consentForm.phone) {
+      setCreditError('All fields are required.')
+      return
+    }
+
+    setFetchingScore(true)
+    try {
+      const res = await api.post('/credit/score', consentForm)
+      if (res.data.success) {
+        setCreditData({ hasCreditScore: true, ...res.data })
+        setShowConsentModal(false)
+        setConsentForm({ name: '', pan: '', dob: '', phone: '', annualIncome: '', consent: false })
+        /* Fetch eligibility */
+        const eligRes = await api.get('/credit/eligibility')
+        if (eligRes.data.success) setEligibility(eligRes.data)
+      }
+    } catch (err) {
+      setCreditError(err.response?.data?.message || 'Failed to fetch credit score. Please try again.')
+    } finally {
+      setFetchingScore(false)
+    }
+  }
 
   const handleDelete = async (id) => {
     try {
@@ -271,8 +392,187 @@ export default function Dashboard() {
                 </div>
               </Reveal>
 
+              {/* ═══════════════════════════════════════════
+                   CREDIT HEALTH SECTION
+                   ═══════════════════════════════════════════ */}
+              <Reveal delay={0.18}>
+                <div className="credit-health-section" style={{ marginBottom: 28 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'Outfit,sans-serif' }}>Credit Health</div>
+                    {creditData?.hasCreditScore && (
+                      <span style={{ fontSize: 10, color: '#3f3f46', fontFamily: 'Outfit,sans-serif' }}>
+                        Last updated: {creditData.fetchedAt ? new Date(creditData.fetchedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      </span>
+                    )}
+                  </div>
+
+                  {creditLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                      <div className="scan-ring" style={{ width: 32, height: 32 }} />
+                    </div>
+                  ) : !creditData?.hasCreditScore ? (
+                    /* ── No score yet — show CTA ── */
+                    <div style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.04))', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 16, padding: 28, textAlign: 'center' }}>
+                      <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 6, fontFamily: 'Outfit,sans-serif' }}>Check Your Credit Score</div>
+                      <p style={{ fontSize: 12, color: '#71717a', marginBottom: 20, maxWidth: 400, margin: '0 auto 20px', lineHeight: 1.6 }}>
+                        Fetch your credit score to see which premium cards you're eligible for, get personalized recommendations, and track your financial health.
+                      </p>
+                      <button className="btn-pill" onClick={() => { setConsentForm(f => ({ ...f, name: user?.name || '' })); setShowConsentModal(true) }}>
+                        Fetch Credit Score <span className="arrow-circle">→</span>
+                      </button>
+                      <p style={{ fontSize: 10, color: '#3f3f46', marginTop: 16, fontFamily: 'Outfit,sans-serif' }}>
+                        🔒 We do not store your PAN or sensitive financial data
+                      </p>
+                    </div>
+                  ) : (
+                    /* ── Score exists — show full credit panel ── */
+                    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16 }} className="credit-grid">
+                      {/* Score card */}
+                      <div style={{ background: '#0a0a0a', border: '1px solid #121212', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <ScoreGauge score={creditData.creditScore} size={140} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                          <div style={{ fontSize: 10, color: '#71717a', fontFamily: 'Outfit,sans-serif' }}>300</div>
+                          <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'linear-gradient(90deg, #ef4444, #f97316, #22c55e, #10b981)', opacity: 0.3 }} />
+                          <div style={{ fontSize: 10, color: '#71717a', fontFamily: 'Outfit,sans-serif' }}>900</div>
+                        </div>
+                        <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {[
+                            { label: 'Score', value: creditData.creditScore },
+                            { label: 'Status', value: creditData.statusLabel },
+                            { label: 'Income', value: creditData.annualIncome ? `₹${(creditData.annualIncome / 100000).toFixed(1)}L` : '—' },
+                          ].map((item, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontFamily: 'Outfit,sans-serif' }}>
+                              <span style={{ color: '#71717a' }}>{item.label}</span>
+                              <span style={{ color: '#d4d4d8', fontWeight: 600 }}>{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button className="btn-pill ghost" style={{ marginTop: 16, width: '100%', fontSize: 12 }} onClick={() => { setConsentForm(f => ({ ...f, name: user?.name || '' })); setShowConsentModal(true) }}>
+                          Refresh Score
+                        </button>
+                      </div>
+
+                      {/* Eligible Cards + Tips */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {/* Eligible cards */}
+                        <div style={{ background: '#0a0a0a', border: '1px solid #121212', borderRadius: 16, padding: 20 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 12, fontFamily: 'Outfit,sans-serif' }}>
+                            Cards You Qualify For {eligibility?.meta && <span style={{ fontWeight: 500, color: '#52525b' }}>({eligibility.meta.eligibleCount} found)</span>}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {eligibility?.eligible?.slice(0, 4).map((card, i) => (
+                              <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.05 }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#080808', border: '1px solid #111', borderRadius: 10, transition: 'border-color 0.2s', cursor: 'default' }}
+                                whileHover={{ borderColor: '#222' }}
+                              >
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#111', border: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#a78bfa', fontFamily: 'Outfit,sans-serif', flexShrink: 0 }}>
+                                  {card.matchPct}%
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#d4d4d8', fontFamily: 'Outfit,sans-serif' }}>{card.name}</span>
+                                    <EligTag tag={card.tag} />
+                                    {card.alreadyHas && <span style={{ fontSize: 8, color: '#52525b', fontWeight: 600, textTransform: 'uppercase' }}>You have this</span>}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: '#52525b', marginTop: 2, fontFamily: 'Outfit,sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {card.matchReasons?.join(' · ') || card.categories?.join(', ')}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                                  <div style={{ fontSize: 10, color: '#3f3f46', fontFamily: 'Outfit,sans-serif' }}>
+                                    {card.annualFee === 0 ? 'Free' : `₹${card.annualFee}/yr`}
+                                  </div>
+
+                                  {true && (
+                                    <button
+                                      onClick={() => {
+                                        console.log("CLICKED CARD:", card)
+                                        if (card.applyLink) {
+                                          window.open(card.applyLink, '_blank')
+                                        } else {
+                                          alert("No apply link available")
+                                        }
+                                      }}
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '4px 10px',
+                                        borderRadius: 999,
+                                        border: '1px solid #1f1f1f',
+                                        background: '#0d0d0d',
+                                        color: '#a78bfa',
+                                        cursor: 'pointer',
+                                        fontFamily: 'Outfit,sans-serif',
+                                        transition: 'all 0.2s'
+                                      }}
+                                      onMouseEnter={e => {
+                                        e.currentTarget.style.borderColor = '#8b5cf6'
+                                        e.currentTarget.style.color = '#c4b5fd'
+                                      }}
+                                      onMouseLeave={e => {
+                                        e.currentTarget.style.borderColor = '#1f1f1f'
+                                        e.currentTarget.style.color = '#a78bfa'
+                                      }}
+                                    >
+                                      Apply →
+                                    </button>
+                                  )}
+                                </div>
+                              </motion.div>
+                            ))}
+                            {(!eligibility?.eligible || eligibility.eligible.length === 0) && (
+                              <div style={{ textAlign: 'center', padding: '20px 0', color: '#3f3f46', fontSize: 12 }}>No eligible cards found</div>
+                            )}
+                          </div>
+
+                          {/* Near eligible */}
+                          {eligibility?.nearEligible?.length > 0 && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#71717a', marginTop: 16, marginBottom: 8, fontFamily: 'Outfit,sans-serif' }}>Unlock with a higher score</div>
+                              {eligibility.nearEligible.slice(0, 2).map((card, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#060606', border: '1px solid #0e0e0e', borderRadius: 10, marginBottom: 6, opacity: 0.7 }}>
+                                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#0a0a0a', border: '1px solid #151515', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#52525b', fontFamily: 'Outfit,sans-serif', flexShrink: 0 }}>
+                                    {card.matchPct}%
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#71717a', fontFamily: 'Outfit,sans-serif' }}>{card.name}</div>
+                                    <div style={{ fontSize: 9, color: '#3f3f46', marginTop: 1 }}>{card.gaps?.join(' · ')}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Improvement Tips */}
+                        {eligibility?.tips?.length > 0 && (
+                          <div style={{ background: '#0a0a0a', border: '1px solid #121212', borderRadius: 16, padding: 20 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 12, fontFamily: 'Outfit,sans-serif' }}>Improve Your Score</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {eligibility.tips.map((tip, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, color: '#a1a1aa', lineHeight: 1.5, fontFamily: 'Outfit,sans-serif' }}>
+                                  <span style={{ fontSize: 14, flexShrink: 0, marginTop: -1 }}>{tip.icon}</span>
+                                  <span>{tip.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <p style={{ fontSize: 9, color: '#27272a', marginTop: 14, fontFamily: 'Outfit,sans-serif', lineHeight: 1.5 }}>
+                              Disclaimer: Card eligibility is estimated based on general criteria. Actual approval depends on the issuing bank's assessment. We do not store sensitive financial data.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Reveal>
+
               {/* Linked cards */}
-              <Reveal delay={0.2}>
+              <Reveal delay={0.22}>
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'Outfit,sans-serif' }}>Linked Cards</div>
@@ -303,7 +603,7 @@ export default function Dashboard() {
               </Reveal>
 
               {/* Recent Transactions */}
-              <Reveal delay={0.25}>
+              <Reveal delay={0.27}>
                 <div style={{ background: '#0a0a0a', border: '1px solid #121212', borderRadius: 16, padding: 24 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                     <div>
@@ -376,7 +676,7 @@ export default function Dashboard() {
               </Reveal>
 
               {/* Quick Actions */}
-              <Reveal delay={0.3}>
+              <Reveal delay={0.32}>
                 <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }} className="philosophy-grid">
                   {[
                     { icon: '◈', title: 'BestDeal AI', desc: 'Find the true lowest price across platforms', action: () => navigate('/best-deal') },
@@ -515,6 +815,155 @@ export default function Dashboard() {
 
         </main>
       </div>
+
+      {/* ═══════════════════════════════════════════
+           CONSENT MODAL
+           ═══════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showConsentModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowConsentModal(false) }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+              style={{ width: '100%', maxWidth: 440, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 20, padding: 32, maxHeight: '90vh', overflowY: 'auto' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <div>
+                  <h3 style={{ fontFamily: 'Outfit,sans-serif', fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Fetch Credit Score</h3>
+                  <p style={{ fontSize: 11, color: '#52525b', margin: '4px 0 0', fontFamily: 'Outfit,sans-serif' }}>Your data is used only for this request</p>
+                </div>
+                <button onClick={() => setShowConsentModal(false)} style={{ background: 'none', border: 'none', color: '#52525b', cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
+              </div>
+
+              <form onSubmit={handleFetchScore}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Name */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#71717a', display: 'block', marginBottom: 6, fontFamily: 'Outfit,sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Full Name</label>
+                    <input
+                      type="text"
+                      value={consentForm.name}
+                      onChange={e => setConsentForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="As per PAN card"
+                      style={{ width: '100%', padding: '10px 14px', background: '#050505', border: '1px solid #1a1a1a', borderRadius: 10, color: '#fff', fontSize: 14, fontFamily: 'Outfit,sans-serif', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.4)'}
+                      onBlur={e => e.target.style.borderColor = '#1a1a1a'}
+                    />
+                  </div>
+
+                  {/* PAN */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#71717a', display: 'block', marginBottom: 6, fontFamily: 'Outfit,sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>PAN Number</label>
+                    <input
+                      type="text"
+                      value={consentForm.pan}
+                      onChange={e => setConsentForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
+                      placeholder="ABCDE1234F"
+                      maxLength={10}
+                      style={{ width: '100%', padding: '10px 14px', background: '#050505', border: '1px solid #1a1a1a', borderRadius: 10, color: '#fff', fontSize: 14, fontFamily: 'Outfit,sans-serif', outline: 'none', letterSpacing: '0.1em', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.4)'}
+                      onBlur={e => e.target.style.borderColor = '#1a1a1a'}
+                    />
+                    <p style={{ fontSize: 9, color: '#27272a', marginTop: 4, fontFamily: 'Outfit,sans-serif' }}>🔒 PAN is used only for verification and NOT stored in our system</p>
+                  </div>
+
+                  {/* DOB + Phone */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#71717a', display: 'block', marginBottom: 6, fontFamily: 'Outfit,sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date of Birth</label>
+                      <input
+                        type="date"
+                        value={consentForm.dob}
+                        onChange={e => setConsentForm(f => ({ ...f, dob: e.target.value }))}
+                        style={{ width: '100%', padding: '10px 14px', background: '#050505', border: '1px solid #1a1a1a', borderRadius: 10, color: '#fff', fontSize: 13, fontFamily: 'Outfit,sans-serif', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+                        onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.4)'}
+                        onBlur={e => e.target.style.borderColor = '#1a1a1a'}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#71717a', display: 'block', marginBottom: 6, fontFamily: 'Outfit,sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Phone</label>
+                      <input
+                        type="tel"
+                        value={consentForm.phone}
+                        onChange={e => setConsentForm(f => ({ ...f, phone: e.target.value }))}
+                        placeholder="9876543210"
+                        maxLength={10}
+                        style={{ width: '100%', padding: '10px 14px', background: '#050505', border: '1px solid #1a1a1a', borderRadius: 10, color: '#fff', fontSize: 14, fontFamily: 'Outfit,sans-serif', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+                        onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.4)'}
+                        onBlur={e => e.target.style.borderColor = '#1a1a1a'}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Annual Income */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#71717a', display: 'block', marginBottom: 6, fontFamily: 'Outfit,sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Annual Income (Optional)</label>
+                    <select
+                      value={consentForm.annualIncome}
+                      onChange={e => setConsentForm(f => ({ ...f, annualIncome: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 14px', background: '#050505', border: '1px solid #1a1a1a', borderRadius: 10, color: '#fff', fontSize: 13, fontFamily: 'Outfit,sans-serif', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', appearance: 'auto' }}
+                    >
+                      <option value="">Select range</option>
+                      <option value="300000">Below ₹3L</option>
+                      <option value="500000">₹3L – ₹5L</option>
+                      <option value="800000">₹5L – ₹10L</option>
+                      <option value="1200000">₹10L – ₹15L</option>
+                      <option value="1800000">₹15L – ₹25L</option>
+                      <option value="2500000">₹25L+</option>
+                    </select>
+                  </div>
+
+                  {/* Consent */}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '12px 14px', background: '#050505', border: '1px solid #111', borderRadius: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={consentForm.consent}
+                      onChange={e => setConsentForm(f => ({ ...f, consent: e.target.checked }))}
+                      style={{ marginTop: 2, accentColor: '#8b5cf6' }}
+                    />
+                    <span style={{ fontSize: 11, color: '#a1a1aa', lineHeight: 1.5, fontFamily: 'Outfit,sans-serif' }}>
+                      I consent to fetch my credit score from the credit bureau. I understand that my PAN and personal details will only be used for this request and will NOT be stored by SwipeBridge.
+                    </span>
+                  </label>
+
+                  {/* Error */}
+                  {creditError && (
+                    <div style={{ fontSize: 12, color: '#ef4444', fontFamily: 'Outfit,sans-serif', padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8 }}>
+                      {creditError}
+                    </div>
+                  )}
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    className="btn-pill"
+                    disabled={fetchingScore}
+                    style={{ width: '100%', marginTop: 4, opacity: fetchingScore ? 0.5 : 1, position: 'relative' }}
+                  >
+                    {fetchingScore ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                        <div className="scan-ring" style={{ width: 16, height: 16 }} />
+                        Fetching score...
+                      </span>
+                    ) : (
+                      <>Fetch Credit Score <span className="arrow-circle">→</span></>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

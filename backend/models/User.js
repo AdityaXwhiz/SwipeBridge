@@ -26,6 +26,14 @@ const userSchema = new mongoose.Schema({
     type: String, enum: ['free','pro','premium'], default: 'free',
   },
   kycVerified: { type: Boolean, default: false },
+
+  /* ── Credit Score (minimal storage — NO PAN or sensitive data stored) ── */
+  creditScore:          { type: Number, default: null, min: 300, max: 900 },
+  creditScoreStatus:    { type: String, enum: ['poor','fair','good','excellent', null], default: null },
+  creditScoreFetchedAt: { type: Date, default: null },
+  annualIncome:         { type: Number, default: null },
+  creditConsentGiven:   { type: Boolean, default: false },
+
   createdAt:   { type: Date,    default: Date.now },
 }, { timestamps: true })
 

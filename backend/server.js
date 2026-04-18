@@ -51,6 +51,7 @@ async function startServer() {
   app.use('/api/payment', require('./routes/payment'))
   app.use('/api/products', require('./routes/products'))
   app.use('/api/assistant', require('./routes/assistant'))
+  app.use('/api/credit', require('./routes/credit'))
 
   /* ── health check ── */
   app.get('/api/health', (req, res) => {
