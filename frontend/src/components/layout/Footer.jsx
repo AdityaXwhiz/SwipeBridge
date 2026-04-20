@@ -8,12 +8,25 @@ export default function Footer() {
         SwipeBridge
       </div>
       <div style={{ display:'flex', gap:24 }}>
-        {['Privacy','Terms','Security'].map(l => (
-          <span key={l} style={{ fontSize:13, color:'#71717a', cursor:'pointer', transition:'color 0.2s', fontFamily:'Outfit, sans-serif' }}
-            onMouseEnter={e => e.target.style.color='#e4e4e7'}
-            onMouseLeave={e => e.target.style.color='#71717a'}
-          >{l}</span>
-        ))}
+        <Link to="/privacy" style={{ fontSize:13, color:'#71717a', textDecoration:'none', fontFamily:'Outfit, sans-serif' }}
+          onMouseEnter={e => e.target.style.color='#e4e4e7'}
+          onMouseLeave={e => e.target.style.color='#71717a'}
+        >Privacy Policy</Link>
+
+        <Link to="/terms" style={{ fontSize:13, color:'#71717a', textDecoration:'none', fontFamily:'Outfit, sans-serif' }}
+          onMouseEnter={e => e.target.style.color='#e4e4e7'}
+          onMouseLeave={e => e.target.style.color='#71717a'}
+        >Terms & Conditions</Link>
+
+        <Link to="/refund" style={{ fontSize:13, color:'#71717a', textDecoration:'none', fontFamily:'Outfit, sans-serif' }}
+          onMouseEnter={e => e.target.style.color='#e4e4e7'}
+          onMouseLeave={e => e.target.style.color='#71717a'}
+        >Refund Policy</Link>
+
+        <Link to="/contact" style={{ fontSize:13, color:'#71717a', textDecoration:'none', fontFamily:'Outfit, sans-serif' }}
+          onMouseEnter={e => e.target.style.color='#e4e4e7'}
+          onMouseLeave={e => e.target.style.color='#71717a'}
+        >Contact Us</Link>
       </div>
       <div style={{ fontSize:12, color:'#71717a', fontFamily:'Outfit, sans-serif' }}>© 2025 SwipeBridge</div>
     </footer>

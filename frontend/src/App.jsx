@@ -10,6 +10,10 @@ import AddCard      from './pages/AddCard'
 import BestDeal     from './pages/BestDeal'
 import CardsDeck    from './pages/CardsDeck'
 import Assistant    from './pages/Assistant'
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Terms from "./pages/Terms";
+import Refund from "./pages/Refund";
+import Contact from "./pages/Contact";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -36,6 +40,10 @@ function AppRoutes() {
         <Route path="/cards-deck" element={<ProtectedRoute><CardsDeck /></ProtectedRoute>} />
         <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
         <Route path="*"          element={<Navigate to="/" replace />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refund" element={<Refund />} />
+        <Route path="/contact" element={<Contact />} />
       </Routes>
     </>
   )

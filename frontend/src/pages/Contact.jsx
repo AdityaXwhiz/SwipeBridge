@@ -1,0 +1,10 @@
+export default function Contact() {
+  return (
+    <div style={{ padding: "20px" }}>
+      <h1>Contact Us</h1>
+      <p>Email: support@swipebridge.com</p>
+      <p>Phone: +91-XXXXXXXXXX</p>
+      <p>Location: Noida, India</p>
+    </div>
+  );
+}
