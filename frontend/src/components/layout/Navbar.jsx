@@ -54,6 +54,36 @@ export default function Navbar() {
         })}>
           Assistant ✨
         </NavLink>
+
+        <NavLink to="/privacy" style={({ isActive }) => ({
+          padding:'7px 14px', borderRadius:9999,
+          fontSize:12, fontWeight:500,
+          color: isActive ? '#fff' : '#71717a',
+          textDecoration:'none',
+          fontFamily:'Outfit, sans-serif',
+        })}>
+          Privacy
+        </NavLink>
+
+        <NavLink to="/terms" style={({ isActive }) => ({
+          padding:'7px 14px', borderRadius:9999,
+          fontSize:12, fontWeight:500,
+          color: isActive ? '#fff' : '#71717a',
+          textDecoration:'none',
+          fontFamily:'Outfit, sans-serif',
+        })}>
+          Terms
+        </NavLink>
+
+        <NavLink to="/refund" style={({ isActive }) => ({
+          padding:'7px 14px', borderRadius:9999,
+          fontSize:12, fontWeight:500,
+          color: isActive ? '#fff' : '#71717a',
+          textDecoration:'none',
+          fontFamily:'Outfit, sans-serif',
+        })}>
+          Refund
+        </NavLink>
       </div>
 
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>

@@ -287,6 +287,9 @@ export default function LandingPage() {
               <p className="anim-3" style={{ marginTop: 28, fontSize: 15, color: '#a1a1aa', lineHeight: 1.7, maxWidth: 380, fontFamily: 'Outfit,sans-serif' }}>
                 Access premium credit card discounts without owning them. Our proxy engine routes your purchases through the best card in our network — you save, we earn a small fee.
               </p>
+              <p style={{ marginTop: 14, fontSize: 13, color: '#71717a', maxWidth: 420, lineHeight: 1.6, fontFamily: 'Outfit,sans-serif' }}>
+                SwipeBridge helps users unlock premium credit card offers and benefits. Any payments made are for accessing exclusive features or premium services on the platform.
+              </p>
 
               <div className="anim-4" style={{ marginTop: 36, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button className="btn-pill" onClick={() => navigate('/add-card')}>
